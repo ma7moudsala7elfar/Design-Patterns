@@ -1,27 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace DiscountChain
+namespace ChainOfResponsibility
 {
-    // ==========================================
-    //  ORDER - the object that travels the chain
-    // ==========================================
+    // ── Order ────────────────────────────────────────────
     class Order
     {
-        public int Id { get; }
         public string CustomerType { get; }   // "Regular", "Member", "VIP"
-        public double OriginalPrice { get; }
         public double FinalPrice { get; private set; }
         public int Quantity { get; }
         public bool IsSeasonSale { get; }
 
-        public List<string> AppliedDiscounts { get; } = new List<string>();
+        public List<string> AppliedDiscounts { get; } = new();
 
-        public Order(int id, string customerType, double price, int quantity, bool isSeasonSale)
+        public Order(string customerType, double price, int quantity, bool isSeasonSale)
         {
-            Id = id;
             CustomerType = customerType;
-            OriginalPrice = price;
             FinalPrice = price;
             Quantity = quantity;
             IsSeasonSale = isSeasonSale;
@@ -29,303 +23,101 @@ namespace DiscountChain
 
         public void ApplyDiscount(string label, double percent)
         {
-            double amount = FinalPrice * (percent / 100.0);
-            FinalPrice -= amount;
-            AppliedDiscounts.Add($"{label} -{percent}%  (saved ${amount:F2})");
+            double saved = FinalPrice * (percent / 100.0);
+            FinalPrice -= saved;
+            AppliedDiscounts.Add($"{label} -{percent}%  (saved ${saved:F2})");
         }
     }
 
-    // ==========================================
-    //  BASE HANDLER - abstract chain link
-    // ==========================================
+    // ── Base Handler ──────────────────────────────────────
     abstract class DiscountHandler
     {
         private DiscountHandler _next;
 
-        // fluent linking: handler1.SetNext(handler2).SetNext(handler3)
         public DiscountHandler SetNext(DiscountHandler next)
         {
             _next = next;
-            return next;
+            return next;        // fluent chaining
         }
 
         public void Handle(Order order)
         {
-            Process(order);       // try to apply this handler's discount
-            _next?.Handle(order); // always pass to the next handler
+            Process(order);       // كل handler يشوف هيطبق الخصم ولا لأ
+            _next?.Handle(order); // دايمًا بيعدي للتالي
         }
 
         protected abstract void Process(Order order);
     }
 
-    // ==========================================
-    //  CONCRETE HANDLERS
-    // ==========================================
-
-    // 1. Season Sale Discount — 10% if it's a seasonal sale
+    // ── Concrete Handlers ─────────────────────────────────
     class SeasonSaleHandler : DiscountHandler
     {
         protected override void Process(Order order)
         {
-            if (order.IsSeasonSale)
-                order.ApplyDiscount("Season Sale   ", 10);
+            if (order.IsSeasonSale) order.ApplyDiscount("Season Sale", 10);
         }
     }
 
-    // 2. Bulk Discount — 5% if quantity >= 5
-    class BulkDiscountHandler : DiscountHandler
+    class BulkHandler : DiscountHandler
     {
         protected override void Process(Order order)
         {
-            if (order.Quantity >= 5)
-                order.ApplyDiscount("Bulk Purchase ", 5);
+            if (order.Quantity >= 5) order.ApplyDiscount("Bulk (qty>=5)", 5);
         }
     }
 
-    // 3. Member Discount — 8% for Members and VIPs
-    class MemberDiscountHandler : DiscountHandler
+    class MemberHandler : DiscountHandler
     {
         protected override void Process(Order order)
         {
-            if (order.CustomerType == "Member" || order.CustomerType == "VIP")
-                order.ApplyDiscount("Member        ", 8);
+            if (order.CustomerType is "Member" or "VIP")
+                order.ApplyDiscount("Member", 8);
         }
     }
 
-    // 4. VIP Discount — extra 15% for VIPs only
-    class VipDiscountHandler : DiscountHandler
+    class VipHandler : DiscountHandler
     {
         protected override void Process(Order order)
         {
-            if (order.CustomerType == "VIP")
-                order.ApplyDiscount("VIP Exclusive ", 15);
+            if (order.CustomerType == "VIP") order.ApplyDiscount("VIP", 15);
         }
     }
 
-    // 5. Loyalty Discount — 5% if final price is still above $500
-    class LoyaltyDiscountHandler : DiscountHandler
-    {
-        protected override void Process(Order order)
-        {
-            if (order.FinalPrice > 500)
-                order.ApplyDiscount("Loyalty (>500)", 5);
-        }
-    }
-
-    // ==========================================
-    //  PROGRAM
-    // ==========================================
+    // ── Program ───────────────────────────────────────────
     class Program
     {
         static void Main()
         {
-            Console.OutputEncoding = System.Text.Encoding.UTF8;
-
-            // --- Build the chain once ---
+            // بناء الـ chain مرة واحدة
             var chain = new SeasonSaleHandler();
-            chain.SetNext(new BulkDiscountHandler())
-                 .SetNext(new MemberDiscountHandler())
-                 .SetNext(new VipDiscountHandler())
-                 .SetNext(new LoyaltyDiscountHandler());
+            chain.SetNext(new BulkHandler())
+                 .SetNext(new MemberHandler())
+                 .SetNext(new VipHandler());
 
-            bool running = true;
-            while (running)
+            var orders = new[]
             {
-                PrintHeader();
-                PrintMenu();
-                string choice = Console.ReadLine()?.Trim();
-
-                switch (choice)
-                {
-                    case "1": RunDemo(chain); break;
-                    case "2": RunCustomOrder(chain); break;
-                    case "3": ShowChainDiagram(); break;
-                    case "4":
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine("\n  Goodbye!\n");
-                        Console.ResetColor();
-                        running = false;
-                        break;
-                    default:
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("  Invalid choice.");
-                        Console.ResetColor();
-                        break;
-                }
-            }
-        }
-
-        // --- Pre-built demo with 4 different order types ---
-        static void RunDemo(DiscountHandler chain)
-        {
-            var orders = new List<Order>
-            {
-                new Order(1, "Regular", 200,  2, false),
-                new Order(2, "Regular", 800,  6, true),
-                new Order(3, "Member",  600,  3, true),
-                new Order(4, "VIP",     900, 10, true),
+                new Order("Regular", 200,  2, false),
+                new Order("Regular", 800,  6, true),
+                new Order("Member",  600,  3, true),
+                new Order("VIP",     900, 10, true),
             };
 
-            Console.WriteLine();
             foreach (var order in orders)
             {
                 chain.Handle(order);
-                PrintOrderResult(order);
+                PrintResult(order);
             }
-
-            Console.Write("\n  Press Enter to continue...");
-            Console.ReadLine();
         }
 
-        // --- Let the user build their own order ---
-        static void RunCustomOrder(DiscountHandler chain)
+        static void PrintResult(Order order)
         {
-            Console.WriteLine();
-
-            string customerType = PromptChoice(
-                "  Customer type:",
-                new[] { "Regular", "Member", "VIP" });
-
-            double price = PromptDouble("  Original price ($): ");
-            int quantity = PromptInt("  Quantity: ");
-            bool season = PromptBool("  Is it a season sale? (y/n): ");
-
-            var order = new Order(99, customerType, price, quantity, season);
-            chain.Handle(order);
-
-            Console.WriteLine();
-            PrintOrderResult(order);
-
-            Console.Write("\n  Press Enter to continue...");
-            Console.ReadLine();
-        }
-
-        // --- Visual diagram of the chain ---
-        static void ShowChainDiagram()
-        {
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine(@"
-  Chain of Responsibility — Discount Pipeline
-  ============================================
-
-  Order
-    │
-    ▼
-  ┌─────────────────────────────┐
-  │  1. SeasonSaleHandler       │  IsSeasonSale == true  → -10%
-  └──────────────┬──────────────┘
-                 │ (always passes to next)
-                 ▼
-  ┌─────────────────────────────┐
-  │  2. BulkDiscountHandler     │  Quantity >= 5         → -5%
-  └──────────────┬──────────────┘
-                 │
-                 ▼
-  ┌─────────────────────────────┐
-  │  3. MemberDiscountHandler   │  Member or VIP         → -8%
-  └──────────────┬──────────────┘
-                 │
-                 ▼
-  ┌─────────────────────────────┐
-  │  4. VipDiscountHandler      │  VIP only              → -15%
-  └──────────────┬──────────────┘
-                 │
-                 ▼
-  ┌─────────────────────────────┐
-  │  5. LoyaltyDiscountHandler  │  FinalPrice > $500     → -5%
-  └─────────────────────────────┘
-                 │
-                 ▼
-             Final Price
-");
-            Console.ResetColor();
-            Console.Write("  Press Enter to continue...");
-            Console.ReadLine();
-        }
-
-        // ==========================================
-        //  UI HELPERS
-        // ==========================================
-        static void PrintHeader()
-        {
-            Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.WriteLine(@"
-  ╔══════════════════════════════════════════════════╗
-  ║     Discount System  -  Chain of Responsibility  ║
-  ║     Every handler decides: apply or skip!        ║
-  ╚══════════════════════════════════════════════════╝");
-            Console.ResetColor();
-        }
-
-        static void PrintMenu()
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(@"
-  ┌─────────────────────────────────┐
-  │            Main Menu            │
-  ├─────────────────────────────────┤
-  │  1. Run demo (4 sample orders)  │
-  │  2. Create custom order         │
-  │  3. Show chain diagram          │
-  │  4. Exit                        │
-  └─────────────────────────────────┘");
-            Console.ResetColor();
-            Console.Write("  Choose: ");
-        }
-
-        static void PrintOrderResult(Order order)
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine($"  ┌─ Order #{order.Id}  [{order.CustomerType}]  Qty: {order.Quantity}  Season: {(order.IsSeasonSale ? "Yes" : "No")}");
-            Console.WriteLine($"  │  Original Price : ${order.OriginalPrice:F2}");
-
+            Console.WriteLine($"\n[{order.CustomerType}]");
             if (order.AppliedDiscounts.Count == 0)
-            {
-                Console.ForegroundColor = ConsoleColor.Gray;
-                Console.WriteLine("  │  No discounts applied.");
-            }
+                Console.WriteLine("  No discounts.");
             else
-            {
-                Console.ForegroundColor = ConsoleColor.Yellow;
                 foreach (var d in order.AppliedDiscounts)
-                    Console.WriteLine($"  │  ✔ {d}");
-            }
-
-            double saved = order.OriginalPrice - order.FinalPrice;
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"  │  Final Price    : ${order.FinalPrice:F2}   (total saved: ${saved:F2})");
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("  └─────────────────────────────────────────────");
-            Console.ResetColor();
-        }
-
-        static string PromptChoice(string label, string[] options)
-        {
-            Console.WriteLine(label);
-            for (int i = 0; i < options.Length; i++)
-                Console.WriteLine($"    {i + 1}. {options[i]}");
-            Console.Write("  Choice: ");
-            if (int.TryParse(Console.ReadLine(), out int idx) && idx >= 1 && idx <= options.Length)
-                return options[idx - 1];
-            return options[0];
-        }
-
-        static double PromptDouble(string label)
-        {
-            Console.Write(label);
-            return double.TryParse(Console.ReadLine(), out double v) ? v : 0;
-        }
-
-        static int PromptInt(string label)
-        {
-            Console.Write(label);
-            return int.TryParse(Console.ReadLine(), out int v) ? v : 1;
-        }
-
-        static bool PromptBool(string label)
-        {
-            Console.Write(label);
-            return Console.ReadLine()?.Trim().ToLower() == "y";
+                    Console.WriteLine($"  + {d}");
+            Console.WriteLine($"  Final: ${order.FinalPrice:F2}");
         }
     }
 }
