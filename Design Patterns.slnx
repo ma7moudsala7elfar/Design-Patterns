@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="ChainOfResponsibility/ChainOfResponsibility.csproj" />
+  <Project Path="FactoryPattern/FactoryPattern.csproj" />
+  <Project Path="PrototypePattern/PrototypePattern.csproj" />
+  <Project Path="ProxyPattern/ProxyPattern.csproj" />
+  <Project Path="SingletonPattern/SingletonPattern.csproj" />
+</Solution>
